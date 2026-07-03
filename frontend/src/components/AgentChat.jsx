@@ -1,207 +1,196 @@
-import React, { useState, useEffect } from 'react';
+import React, { useState, useEffect, useRef } from 'react';
 
 function AgentChat({ apiBase }) {
   const [messages, setMessages] = useState([]);
+  const [inputText, setInputText] = useState('');
   const [loading, setLoading] = useState(false);
   const [isReplanning, setIsReplanning] = useState(false);
-  const [showOptions, setShowOptions] = useState(null); // 'check-in', 'excuses', 'replan-trigger'
+  const messagesEndRef = useRef(null);
+
+  const scrollToBottom = () => {
+    messagesEndRef.current?.scrollIntoView({ behavior: 'smooth' });
+  };
 
   useEffect(() => {
-    // Start with a welcoming message checking in on progress
-    initiateCheckIn();
+    scrollToBottom();
+  }, [messages]);
+
+  useEffect(() => {
+    // Kick off with an AI-generated contextual check-in
+    sendInitialGreeting();
   }, []);
 
-  const initiateCheckIn = async () => {
+  const sendInitialGreeting = async () => {
+    const greeting = "Hello! I'm your AI Project Manager. I'm checking your current progress — what's on your mind today?";
+    setMessages([{ role: 'assistant', content: greeting }]);
     setLoading(true);
     try {
-      // Fetch stats to make it contextual
-      const res = await fetch(`${apiBase}/dashboard`);
-      const stats = await res.json();
-      
-      let greeting = "Hello there! I'm your AI Personal Project Manager. Let's do our daily review. ";
-      
-      if (!stats.has_goal) {
-        setMessages([
-          { sender: 'agent', text: "Hello! You haven't set a goal yet. Please head to settings to set your Gemini API Key and enter a goal!" }
-        ]);
-        setLoading(false);
-        return;
-      }
-
-      if (stats.completion_percentage === 100) {
-        greeting += `Wow! You've completed 100% of your plan. Incredible job! 🏆`;
-        setMessages([{ sender: 'agent', text: greeting }]);
-        setShowOptions(null);
-      } else if (stats.remaining_count === 0) {
-        greeting += `It looks like you've finished all scheduled tasks! Feel free to review or add a new goal.`;
-        setMessages([{ sender: 'agent', text: greeting }]);
-        setShowOptions(null);
-      } else {
-        // Find if today's tasks are completed
-        const todayStr = new Date().toISOString().split('T')[0];
-        const tasksRes = await fetch(`${apiBase}/tasks?date=${todayStr}`);
-        const todayTasks = await tasksRes.json();
-        
-        if (todayTasks.length === 0) {
-          greeting += "You don't have any tasks scheduled for today. How is your overall revision going?";
-          setMessages([{ sender: 'agent', text: greeting }]);
-          setShowOptions(null);
-        } else {
-          const completedCount = todayTasks.filter(t => t.status === 'completed').length;
-          const totalCount = todayTasks.length;
-          
-          if (completedCount === totalCount) {
-            greeting += `Awesome! You completed all ${totalCount} of today's scheduled tasks. Your streak is alive at ${stats.streak} days! Keep it up! 🚀`;
-            setMessages([{ sender: 'agent', text: greeting }]);
-            setShowOptions(null);
-          } else {
-            greeting += `I notice you have completed ${completedCount} out of ${totalCount} tasks scheduled for today. Did you manage to finish everything else?`;
-            setMessages([{ sender: 'agent', text: greeting }]);
-            setShowOptions('check-in');
-          }
-        }
-      }
-    } catch (err) {
-      console.error(err);
-      setMessages([{ sender: 'agent', text: "Hey! Having trouble reaching the server. Make sure the backend is running." }]);
+      const reply = await callChat([
+        { role: 'user', content: "Give me a brief, warm check-in based on my current progress. Keep it to 2-3 sentences." }
+      ]);
+      setMessages([{ role: 'assistant', content: reply }]);
+    } catch {
+      setMessages([{ role: 'assistant', content: greeting }]);
     } finally {
       setLoading(false);
     }
   };
 
-  const handleUserResponse = (option) => {
-    if (option === 'yes') {
-      setMessages(prev => [
-        ...prev,
-        { sender: 'user', text: "Yes, I finished all my tasks!" },
-        { sender: 'agent', text: "Fantastic! I've logged that. You're doing great. See you tomorrow!" }
-      ]);
-      setShowOptions(null);
-    } else if (option === 'no') {
-      setMessages(prev => [
-        ...prev,
-        { sender: 'user', text: "No, I missed some tasks." },
-        { sender: 'agent', text: "That is totally fine. Life happens! To help me adjust your path, what was the primary reason?" }
-      ]);
-      setShowOptions('excuses');
+  const callChat = async (messageHistory) => {
+    const res = await fetch(`${apiBase}/chat`, {
+      method: 'POST',
+      headers: { 'Content-Type': 'application/json' },
+      body: JSON.stringify({ messages: messageHistory })
+    });
+    if (!res.ok) {
+      const err = await res.json();
+      throw new Error(err.detail || 'Chat failed');
+    }
+    const data = await res.json();
+    return data.reply;
+  };
+
+  const handleSend = async (e) => {
+    e?.preventDefault();
+    const text = inputText.trim();
+    if (!text || loading) return;
+
+    const newMessages = [...messages, { role: 'user', content: text }];
+    setMessages(newMessages);
+    setInputText('');
+    setLoading(true);
+
+    try {
+      const reply = await callChat(newMessages);
+      setMessages(prev => [...prev, { role: 'assistant', content: reply }]);
+    } catch (err) {
+      setMessages(prev => [...prev, {
+        role: 'assistant',
+        content: `⚠️ ${err.message || "Couldn't connect to the AI agent. Make sure the backend is running."}`
+      }]);
+    } finally {
+      setLoading(false);
     }
   };
 
-  const handleExcuse = (excuseText) => {
-    let agentResponse = "";
-    switch (excuseText) {
-      case 'Too difficult':
-        agentResponse = "I understand. Sizing down complexity is part of training. Let's reschedule the remaining tasks so we can tackle them with fresh focus.";
-        break;
-      case 'Busy':
-        agentResponse = "Time is always a constraint. Let's compress the remaining tasks so you can catch up without feeling overwhelmed.";
-        break;
-      case 'Lost motivation':
-        agentResponse = "Motivation comes and goes; discipline is what builds habits. Let's reset your schedule to give you a clean slate!";
-        break;
-      default:
-        agentResponse = "Understood. Let's reorganize your schedule so you stay on track starting from today.";
-    }
-
-    setMessages(prev => [
-      ...prev,
-      { sender: 'user', text: `Reason: ${excuseText}` },
-      { sender: 'agent', text: agentResponse }
-    ]);
-    setShowOptions('replan-trigger');
+  const handleQuickAction = (prompt) => {
+    setInputText(prompt);
   };
 
   const handleTriggerReplan = async () => {
     setIsReplanning(true);
-    setLoading(true);
     try {
       const res = await fetch(`${apiBase}/replan`, { method: 'POST' });
       const data = await res.json();
-      
       setMessages(prev => [
         ...prev,
-        { sender: 'agent', text: `⚡ Replanning successful! I have gathered all incomplete/missed tasks and rescheduled them starting from today, respecting your daily hours availability.` }
+        { role: 'user', content: "Please reschedule my remaining tasks." },
+        { role: 'assistant', content: `⚡ Done! I've rescheduled all your incomplete and missed tasks starting from today, fitting them into your available daily hours. Check the Calendar view to see the updated plan.` }
       ]);
-      setShowOptions(null);
-    } catch (err) {
-      console.error(err);
-      setMessages(prev => [
-        ...prev,
-        { sender: 'agent', text: "Oops, replanning failed. Please check if settings are correct." }
-      ]);
+    } catch {
+      setMessages(prev => [...prev, {
+        role: 'assistant', content: "Replanning failed. Please check if the backend is running."
+      }]);
     } finally {
       setIsReplanning(false);
-      setLoading(false);
     }
   };
 
+  const quickActions = [
+    { label: "📋 Today's plan", prompt: "What tasks do I have today and which should I prioritize?" },
+    { label: "📈 My progress", prompt: "How am I doing overall? Give me a quick progress summary." },
+    { label: "❌ Missed tasks", prompt: "I missed some tasks. What should I do to get back on track?" },
+    { label: "🧠 Explain a topic", prompt: "Can you give me a quick explanation of the main topic from this week?" },
+  ];
+
   return (
-    <div className="glass-card chat-container">
+    <div className="glass-card chat-container" style={{ display: 'flex', flexDirection: 'column', height: '80vh' }}>
       {/* Header */}
-      <div style={{ paddingBottom: '1rem', borderBottom: '1px solid var(--border-glass)', marginBottom: '1.5rem' }}>
+      <div style={{ paddingBottom: '1rem', borderBottom: '1px solid var(--border-glass)', marginBottom: '1rem', flexShrink: 0 }}>
         <h2 style={{ fontSize: '1.5rem', display: 'flex', alignItems: 'center', gap: '0.5rem' }}>
           <span>🤖</span>
-          <span>Daily Review Agent</span>
+          <span>AI Coaching Chat</span>
+          <span style={{
+            fontSize: '0.7rem', background: 'rgba(99, 102, 241, 0.15)',
+            color: 'var(--color-primary)', padding: '0.2rem 0.6rem',
+            borderRadius: '20px', border: '1px solid rgba(99, 102, 241, 0.3)', marginLeft: '0.5rem'
+          }}>Gemini-Powered</span>
         </h2>
-        <p style={{ color: 'var(--text-muted)', fontSize: '0.85rem' }}>Your active PM coach. Evaluates roadblocks and helps you reschedule.</p>
+        <p style={{ color: 'var(--text-muted)', fontSize: '0.85rem' }}>
+          Ask anything — your progress, stuck topics, schedule adjustments. Context-aware AI coaching.
+        </p>
       </div>
 
-      {/* History */}
-      <div className="chat-history">
+      {/* Message history */}
+      <div className="chat-history" style={{ flex: 1, overflowY: 'auto', marginBottom: '1rem' }}>
         {messages.map((m, idx) => (
-          <div key={idx} className={`chat-bubble ${m.sender}`}>
-            {m.text}
+          <div key={idx} className={`chat-bubble ${m.role === 'user' ? 'user' : 'agent'}`}
+            style={{ animation: 'fadeSlideUp 0.25s ease' }}>
+            {m.role === 'assistant' && (
+              <div style={{ fontSize: '0.7rem', color: 'var(--text-dim)', marginBottom: '0.25rem', display: 'flex', alignItems: 'center', gap: '0.3rem' }}>
+                <span>🤖</span> AI Coach
+              </div>
+            )}
+            <div style={{ whiteSpace: 'pre-wrap', lineHeight: '1.6' }}>{m.content}</div>
           </div>
         ))}
         {loading && (
-          <div className="chat-bubble agent" style={{ display: 'flex', alignItems: 'center', gap: '0.5rem' }}>
-            <span className="stream-spinner" style={{ width: '20px', height: '20px', borderWidth: '2px', margin: '0' }}></span>
-            <span>Thinking...</span>
+          <div className="chat-bubble agent" style={{ display: 'flex', alignItems: 'center', gap: '0.75rem' }}>
+            <span className="stream-spinner" style={{ width: '18px', height: '18px', borderWidth: '2px', margin: 0 }}></span>
+            <span style={{ color: 'var(--text-muted)', fontSize: '0.9rem' }}>Thinking...</span>
           </div>
         )}
+        <div ref={messagesEndRef} />
       </div>
 
-      {/* Options Panel */}
-      <div style={{ marginTop: 'auto', display: 'flex', flexDirection: 'column', gap: '1rem' }}>
-        {showOptions === 'check-in' && (
-          <div style={{ display: 'flex', gap: '1rem', justifyContent: 'center' }}>
-            <button className="btn btn-primary" onClick={() => handleUserResponse('yes')}>
-              Yes, all done! ✓
-            </button>
-            <button className="btn btn-secondary" onClick={() => handleUserResponse('no')} style={{ color: 'var(--color-warning)' }}>
-              No, I missed some tasks
-            </button>
-          </div>
-        )}
-
-        {showOptions === 'excuses' && (
-          <div style={{ display: 'flex', flexWrap: 'wrap', gap: '0.5rem', justifyContent: 'center' }}>
-            {['Too difficult?', 'Busy?', 'Lost motivation?', 'Unexpected work?'].map(exc => (
-              <button 
-                key={exc} 
-                className="btn btn-secondary" 
-                onClick={() => handleExcuse(exc.replace('?', ''))}
-                style={{ padding: '0.5rem 1rem', fontSize: '0.85rem' }}
-              >
-                {exc}
-              </button>
-            ))}
-          </div>
-        )}
-
-        {showOptions === 'replan-trigger' && (
-          <div style={{ display: 'flex', justifyContent: 'center' }}>
-            <button 
-              className="btn btn-primary" 
-              onClick={handleTriggerReplan}
-              disabled={isReplanning}
-              style={{ padding: '0.85rem 2rem' }}
-            >
-              {isReplanning ? "Recalculating..." : "⚡ Re-schedule Remaining Tasks"}
-            </button>
-          </div>
-        )}
+      {/* Quick actions */}
+      <div style={{ display: 'flex', gap: '0.5rem', flexWrap: 'wrap', marginBottom: '0.75rem', flexShrink: 0 }}>
+        {quickActions.map(qa => (
+          <button
+            key={qa.label}
+            className="btn btn-secondary"
+            style={{ padding: '0.35rem 0.75rem', fontSize: '0.78rem', borderRadius: '20px' }}
+            onClick={() => handleQuickAction(qa.prompt)}
+            disabled={loading}
+          >
+            {qa.label}
+          </button>
+        ))}
+        <button
+          className="btn"
+          style={{
+            padding: '0.35rem 0.75rem', fontSize: '0.78rem', borderRadius: '20px',
+            background: 'rgba(239, 68, 68, 0.1)', color: 'var(--color-danger)',
+            border: '1px solid rgba(239, 68, 68, 0.25)'
+          }}
+          onClick={handleTriggerReplan}
+          disabled={isReplanning || loading}
+        >
+          {isReplanning ? '⏳ Rescheduling...' : '⚡ Reschedule Missed'}
+        </button>
       </div>
+
+      {/* Input */}
+      <form onSubmit={handleSend} style={{ display: 'flex', gap: '0.75rem', flexShrink: 0 }}>
+        <input
+          type="text"
+          className="form-input"
+          value={inputText}
+          onChange={e => setInputText(e.target.value)}
+          placeholder="Ask your AI coach anything..."
+          disabled={loading}
+          style={{ flex: 1, margin: 0 }}
+          autoFocus
+        />
+        <button
+          type="submit"
+          className="btn btn-primary"
+          disabled={!inputText.trim() || loading}
+          style={{ padding: '0.75rem 1.5rem', flexShrink: 0 }}
+        >
+          Send
+        </button>
+      </form>
     </div>
   );
 }

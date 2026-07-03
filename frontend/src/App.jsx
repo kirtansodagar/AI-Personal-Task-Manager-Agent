@@ -5,12 +5,50 @@ import CalendarView from './components/CalendarView';
 import MilestonesView from './components/MilestonesView';
 import AgentChat from './components/AgentChat';
 import SettingsView from './components/SettingsView';
+import WeeklyReview from './components/WeeklyReview';
+import HeatmapView from './components/HeatmapView';
+import LoginView from './components/LoginView';
+import AccountView from './components/AccountView';
 
 const API_BASE = 'http://localhost:8000/api';
 
+// Global Fetch Interceptor
+const originalFetch = window.fetch;
+window.fetch = async function (url, options = {}) {
+  const token = localStorage.getItem('gravity_task_token');
+  if (token) {
+    if (!options.headers) {
+      options.headers = {};
+    }
+    if (options.headers instanceof Headers) {
+      options.headers.set('Authorization', `Bearer ${token}`);
+    } else if (Array.isArray(options.headers)) {
+      options.headers.push(['Authorization', `Bearer ${token}`]);
+    } else {
+      options.headers['Authorization'] = `Bearer ${token}`;
+    }
+  }
+  
+  const response = await originalFetch(url, options);
+  
+  if (response.status === 401) {
+    const isAuthEndpoint = url.toString().includes('/auth/login') || url.toString().includes('/auth/register');
+    if (!isAuthEndpoint) {
+      localStorage.removeItem('gravity_task_token');
+      localStorage.removeItem('gravity_task_user');
+      window.dispatchEvent(new Event('auth_unauthorized'));
+    }
+  }
+  
+  return response;
+};
+
 function App() {
+  const [isAuthenticated, setIsAuthenticated] = useState(!!localStorage.getItem('gravity_task_token'));
+  const [currentUser, setCurrentUser] = useState(JSON.parse(localStorage.getItem('gravity_task_user') || 'null'));
   const [activeTab, setActiveTab] = useState('dashboard');
   const [activeGoal, setActiveGoal] = useState(null);
+  const [allGoals, setAllGoals] = useState([]);
   const [loadingGoal, setLoadingGoal] = useState(true);
   const [settings, setSettings] = useState({
     availability: {},
@@ -27,9 +65,51 @@ function App() {
   const [streamError, setStreamError] = useState('');
 
   useEffect(() => {
-    fetchActiveGoal();
-    fetchSettings();
+    const handleUnauthorized = () => {
+      setIsAuthenticated(false);
+      setCurrentUser(null);
+      setActiveGoal(null);
+    };
+    window.addEventListener('auth_unauthorized', handleUnauthorized);
+    verifyToken();
+    return () => {
+      window.removeEventListener('auth_unauthorized', handleUnauthorized);
+    };
   }, []);
+
+  useEffect(() => {
+    if (isAuthenticated) {
+      fetchActiveGoal();
+      fetchSettings();
+      fetchAllGoals();
+    }
+  }, [isAuthenticated]);
+
+  const verifyToken = async () => {
+    const token = localStorage.getItem('gravity_task_token');
+    if (!token) {
+      setIsAuthenticated(false);
+      setLoadingGoal(false);
+      return;
+    }
+
+    try {
+      const res = await fetch(`${API_BASE}/auth/me`);
+      if (res.ok) {
+        const userData = await res.json();
+        setCurrentUser(userData);
+        setIsAuthenticated(true);
+      } else {
+        localStorage.removeItem('gravity_task_token');
+        localStorage.removeItem('gravity_task_user');
+        setIsAuthenticated(false);
+      }
+    } catch (err) {
+      console.error("Token verification failed:", err);
+    } finally {
+      setLoadingGoal(false);
+    }
+  };
 
   const fetchActiveGoal = async () => {
     setLoadingGoal(true);
@@ -45,6 +125,16 @@ function App() {
       console.error("Error fetching active goal:", err);
     } finally {
       setLoadingGoal(false);
+    }
+  };
+
+  const fetchAllGoals = async () => {
+    try {
+      const res = await fetch(`${API_BASE}/goals`);
+      const data = await res.json();
+      setAllGoals(Array.isArray(data) ? data : []);
+    } catch (err) {
+      console.error("Error fetching all goals:", err);
     }
   };
 
@@ -83,7 +173,8 @@ function App() {
       const goalId = initData.goal_id;
 
       // Step 2: Open SSE connection for Streaming Generation
-      const eventSource = new EventSource(`${API_BASE}/goals/generate-stream?goal_id=${goalId}`);
+      const token = localStorage.getItem('gravity_task_token');
+      const eventSource = new EventSource(`${API_BASE}/goals/generate-stream?goal_id=${goalId}&token=${token}`);
 
       eventSource.onmessage = (event) => {
         const payload = JSON.parse(event.data);
@@ -125,6 +216,36 @@ function App() {
     }
   };
 
+  const handleLoginSuccess = (userData, token) => {
+    localStorage.setItem('gravity_task_token', token);
+    localStorage.setItem('gravity_task_user', JSON.stringify(userData));
+    setCurrentUser(userData);
+    setIsAuthenticated(true);
+  };
+
+  const handleLogout = async () => {
+    if (window.confirm("Are you sure you want to log out?")) {
+      try {
+        await fetch(`${API_BASE}/auth/logout`, { method: 'POST' });
+      } catch (err) {
+        console.error("Logout request failed:", err);
+      }
+      handleLogoutClean();
+    }
+  };
+
+  const handleLogoutClean = () => {
+    localStorage.removeItem('gravity_task_token');
+    localStorage.removeItem('gravity_task_user');
+    setIsAuthenticated(false);
+    setCurrentUser(null);
+    setActiveGoal(null);
+  };
+
+  if (!isAuthenticated) {
+    return <LoginView apiBase={API_BASE} onLoginSuccess={handleLoginSuccess} />;
+  }
+
   return (
     <div className="app-container">
       {/* Sidebar Navigation */}
@@ -165,7 +286,23 @@ function App() {
             style={{ opacity: activeGoal ? 1 : 0.5, cursor: activeGoal ? 'pointer' : 'not-allowed' }}
           >
             <span className="nav-icon">🤖</span>
-            <span>Daily Review</span>
+            <span>AI Coach</span>
+          </li>
+          <li 
+            className={`nav-item ${activeTab === 'heatmap' ? 'active' : ''}`}
+            onClick={() => activeGoal && setActiveTab('heatmap')}
+            style={{ opacity: activeGoal ? 1 : 0.5, cursor: activeGoal ? 'pointer' : 'not-allowed' }}
+          >
+            <span className="nav-icon">🔥</span>
+            <span>Activity</span>
+          </li>
+          <li 
+            className={`nav-item ${activeTab === 'review' ? 'active' : ''}`}
+            onClick={() => activeGoal && setActiveTab('review')}
+            style={{ opacity: activeGoal ? 1 : 0.5, cursor: activeGoal ? 'pointer' : 'not-allowed' }}
+          >
+            <span className="nav-icon">📋</span>
+            <span>Weekly Review</span>
           </li>
           <li 
             className={`nav-item ${activeTab === 'settings' ? 'active' : ''}`}
@@ -174,24 +311,41 @@ function App() {
             <span className="nav-icon">⚙️</span>
             <span>Settings</span>
           </li>
+          <li 
+            className={`nav-item ${activeTab === 'account' ? 'active' : ''}`}
+            onClick={() => setActiveTab('account')}
+          >
+            <span className="nav-icon">👤</span>
+            <span>Account</span>
+          </li>
         </ul>
 
-        {activeGoal && (
-          <div className="sidebar-footer">
+
+        <div className="sidebar-footer" style={{ display: 'flex', flexDirection: 'column', gap: '0.75rem' }}>
+          {activeGoal && (
             <button 
-              className="btn btn-danger" 
+              className="btn btn-secondary" 
               onClick={() => {
                 if (window.confirm("Are you sure you want to reset your goal? This will erase your current plan and tasks.")) {
                   setActiveGoal(null);
                   setActiveTab('settings');
                 }
               }}
-              style={{ width: '100%' }}
+              style={{ width: '100%', fontSize: '0.85rem' }}
             >
               Reset Goal
             </button>
-          </div>
-        )}
+          )}
+          
+          <button 
+            className="btn btn-danger" 
+            onClick={handleLogout}
+            style={{ width: '100%', fontSize: '0.85rem', display: 'flex', alignItems: 'center', justifyContent: 'center', gap: '0.5rem' }}
+          >
+            <svg width="14" height="14" viewBox="0 0 24 24" fill="none" stroke="currentColor" strokeWidth="2" strokeLinecap="round" strokeLinejoin="round"><path d="M9 21H5a2 2 0 0 1-2-2V5a2 2 0 0 1 2-2h4"></path><polyline points="16 17 21 12 16 7"></polyline><line x1="21" y1="12" x2="9" y2="12"></line></svg>
+            Logout ({currentUser?.username})
+          </button>
+        </div>
       </aside>
 
       {/* Main View Shell */}
@@ -246,7 +400,10 @@ function App() {
             {activeTab === 'calendar' && <CalendarView apiBase={API_BASE} />}
             {activeTab === 'milestones' && <MilestonesView apiBase={API_BASE} />}
             {activeTab === 'chat' && <AgentChat apiBase={API_BASE} />}
+            {activeTab === 'heatmap' && <HeatmapView apiBase={API_BASE} />}
+            {activeTab === 'review' && <WeeklyReview apiBase={API_BASE} />}
             {activeTab === 'settings' && <SettingsView apiBase={API_BASE} onUpdate={fetchSettings} />}
+            {activeTab === 'account' && <AccountView apiBase={API_BASE} currentUser={currentUser} onUserUpdate={setCurrentUser} onLogout={handleLogoutClean} />}
           </>
         )}
       </main>

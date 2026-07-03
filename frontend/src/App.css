@@ -852,3 +852,406 @@ a:hover {
   font-size: 0.9rem;
   margin-bottom: 1.5rem;
 }
+
+/* ═══════════════════════════════════════
+   V2 ADDITIONS
+═══════════════════════════════════════ */
+
+/* Animated message entrance */
+@keyframes fadeSlideUp {
+  from { opacity: 0; transform: translateY(8px); }
+  to   { opacity: 1; transform: translateY(0); }
+}
+
+/* Sidebar scroll for many nav items */
+.nav-links {
+  overflow-y: auto;
+  scrollbar-width: thin;
+  scrollbar-color: rgba(255,255,255,0.08) transparent;
+}
+
+/* Expand dashboard grid to 3 cols for 6 stat cards */
+.dashboard-grid {
+  grid-template-columns: repeat(3, 1fr);
+}
+
+@media (max-width: 1100px) {
+  .dashboard-grid {
+    grid-template-columns: repeat(2, 1fr);
+  }
+}
+
+/* Nav item active indicator animation */
+.nav-item {
+  position: relative;
+  overflow: hidden;
+}
+
+.nav-item.active::after {
+  content: '';
+  position: absolute;
+  left: 0;
+  top: 20%;
+  height: 60%;
+  width: 3px;
+  background: linear-gradient(180deg, var(--color-primary), var(--color-secondary));
+  border-radius: 0 3px 3px 0;
+  animation: navIndicator 0.25s ease;
+}
+
+@keyframes navIndicator {
+  from { transform: scaleY(0); }
+  to   { transform: scaleY(1); }
+}
+
+/* Skeleton loader */
+.skeleton {
+  background: linear-gradient(90deg, rgba(255,255,255,0.04) 25%, rgba(255,255,255,0.08) 50%, rgba(255,255,255,0.04) 75%);
+  background-size: 200% 100%;
+  animation: shimmer 1.5s infinite;
+  border-radius: 8px;
+}
+
+@keyframes shimmer {
+  0%   { background-position: 200% 0; }
+  100% { background-position: -200% 0; }
+}
+
+/* Stat card entrance animation */
+.stat-card {
+  animation: fadeSlideUp 0.4s ease both;
+}
+
+.stat-card:nth-child(1) { animation-delay: 0.05s; }
+.stat-card:nth-child(2) { animation-delay: 0.1s; }
+.stat-card:nth-child(3) { animation-delay: 0.15s; }
+.stat-card:nth-child(4) { animation-delay: 0.2s; }
+.stat-card:nth-child(5) { animation-delay: 0.25s; }
+.stat-card:nth-child(6) { animation-delay: 0.3s; }
+
+/* Chat bubble improvements */
+.chat-bubble.agent {
+  animation: fadeSlideUp 0.25s ease;
+}
+.chat-bubble.user {
+  animation: fadeSlideUp 0.25s ease;
+}
+
+/* Smooth progress ring draw-in */
+.progress-ring-bar {
+  transition: stroke-dashoffset 1s cubic-bezier(0.4, 0, 0.2, 1);
+}
+
+/* Goal banner gradient animation */
+.goal-banner {
+  animation: fadeSlideUp 0.35s ease;
+  background: linear-gradient(135deg,
+    rgba(139, 92, 246, 0.12) 0%,
+    rgba(6, 182, 212, 0.06) 50%,
+    rgba(139, 92, 246, 0.04) 100%);
+  background-size: 200% 200%;
+  animation: gradientShift 8s ease infinite, fadeSlideUp 0.35s ease;
+}
+
+@keyframes gradientShift {
+  0%   { background-position: 0% 50%; }
+  50%  { background-position: 100% 50%; }
+  100% { background-position: 0% 50%; }
+}
+
+/* Milestone bars animate in */
+.milestone-progress-bar {
+  animation: growBar 0.8s cubic-bezier(0.4, 0, 0.2, 1) both;
+  transform-origin: left;
+}
+
+@keyframes growBar {
+  from { transform: scaleX(0); }
+  to   { transform: scaleX(1); }
+}
+
+/* Login View Styles */
+.login-page {
+  display: flex;
+  align-items: center;
+  justify-content: center;
+  min-height: 100vh;
+  width: 100vw;
+  position: fixed;
+  top: 0;
+  left: 0;
+  z-index: 9999;
+  background-color: var(--bg-primary);
+  background-image: 
+    radial-gradient(at 10% 20%, rgba(124, 58, 237, 0.15) 0px, transparent 40%),
+    radial-gradient(at 90% 80%, rgba(6, 182, 212, 0.12) 0px, transparent 40%),
+    radial-gradient(at 50% 50%, rgba(15, 23, 42, 0.8) 0px, transparent 80%);
+  overflow: hidden;
+}
+
+.login-bg-glows {
+  position: absolute;
+  width: 100%;
+  height: 100%;
+  top: 0;
+  left: 0;
+  pointer-events: none;
+}
+
+.login-glow-orb {
+  position: absolute;
+  border-radius: 50%;
+  filter: blur(100px);
+  opacity: 0.45;
+  mix-blend-mode: screen;
+  animation: floatOrb 20s infinite ease-in-out;
+}
+
+.login-glow-orb-1 {
+  width: 400px;
+  height: 400px;
+  background: var(--color-primary);
+  top: 15%;
+  left: 20%;
+  animation-delay: 0s;
+}
+
+.login-glow-orb-2 {
+  width: 500px;
+  height: 500px;
+  background: var(--color-secondary);
+  bottom: 10%;
+  right: 15%;
+  animation-delay: -5s;
+}
+
+@keyframes floatOrb {
+  0%, 100% {
+    transform: translate(0, 0) scale(1);
+  }
+  25% {
+    transform: translate(50px, -50px) scale(1.1);
+  }
+  50% {
+    transform: translate(-30px, 60px) scale(0.95);
+  }
+  75% {
+    transform: translate(-60px, -20px) scale(1.05);
+  }
+}
+
+.login-card {
+  width: 440px;
+  padding: 2.75rem 2.5rem;
+  background: rgba(18, 18, 29, 0.55);
+  backdrop-filter: blur(25px) saturate(180%);
+  -webkit-backdrop-filter: blur(25px) saturate(180%);
+  border: 1px solid rgba(255, 255, 255, 0.08);
+  border-radius: 20px;
+  box-shadow: 0 15px 45px 0 rgba(0, 0, 0, 0.45);
+  z-index: 10;
+  animation: cardEntrance 0.6s cubic-bezier(0.34, 1.56, 0.64, 1) both;
+  transition: border-color 0.4s ease, box-shadow 0.4s ease;
+}
+
+.login-card:hover {
+  border-color: rgba(139, 92, 246, 0.35);
+  box-shadow: 0 20px 50px 0 rgba(139, 92, 246, 0.15);
+}
+
+@keyframes cardEntrance {
+  from {
+    opacity: 0;
+    transform: scale(0.92) translateY(20px);
+  }
+  to {
+    opacity: 1;
+    transform: scale(1) translateY(0);
+  }
+}
+
+.login-header {
+  text-align: center;
+  margin-bottom: 2.25rem;
+}
+
+.login-brand {
+  display: flex;
+  align-items: center;
+  justify-content: center;
+  gap: 0.85rem;
+  margin-bottom: 1.5rem;
+}
+
+.login-brand-icon {
+  width: 44px;
+  height: 44px;
+  background: linear-gradient(135deg, var(--color-primary), var(--color-secondary));
+  border-radius: 12px;
+  display: flex;
+  align-items: center;
+  justify-content: center;
+  font-size: 1.25rem;
+  font-weight: 800;
+  font-family: var(--font-title);
+  color: #fff;
+  box-shadow: 0 0 20px var(--color-primary-glow);
+}
+
+.login-brand-name {
+  font-size: 1.6rem;
+  font-weight: 800;
+  font-family: var(--font-title);
+  background: linear-gradient(120deg, #fff, #c084fc);
+  -webkit-background-clip: text;
+  -webkit-text-fill-color: transparent;
+}
+
+.login-subtitle {
+  font-size: 0.95rem;
+  color: var(--text-muted);
+}
+
+.login-mode-toggle {
+  display: grid;
+  grid-template-columns: 1fr 1fr;
+  background: rgba(10, 10, 15, 0.4);
+  border: 1px solid var(--border-glass);
+  border-radius: 10px;
+  padding: 4px;
+  margin-bottom: 2rem;
+}
+
+.login-mode-btn {
+  background: transparent;
+  border: none;
+  color: var(--text-muted);
+  padding: 0.65rem;
+  font-family: var(--font-title);
+  font-weight: 600;
+  font-size: 0.9rem;
+  cursor: pointer;
+  border-radius: 8px;
+  transition: var(--transition-smooth);
+}
+
+.login-mode-btn.active {
+  background: linear-gradient(135deg, var(--color-primary), rgba(124, 58, 237, 0.8));
+  color: white;
+  box-shadow: 0 4px 12px rgba(139, 92, 246, 0.3);
+}
+
+.login-form {
+  display: flex;
+  flex-direction: column;
+}
+
+.password-input-wrapper {
+  position: relative;
+  display: flex;
+  align-items: center;
+}
+
+.password-input-wrapper .form-input {
+  width: 100%;
+  padding-right: 2.75rem;
+}
+
+.password-toggle-btn {
+  position: absolute;
+  right: 1rem;
+  background: transparent;
+  border: none;
+  color: var(--text-dim);
+  cursor: pointer;
+  font-size: 1.1rem;
+  display: flex;
+  align-items: center;
+  justify-content: center;
+  transition: var(--transition-smooth);
+}
+
+.password-toggle-btn:hover {
+  color: var(--text-main);
+}
+
+.login-alert {
+  padding: 0.85rem 1rem;
+  border-radius: 10px;
+  font-size: 0.88rem;
+  margin-bottom: 1.5rem;
+  animation: fadeSlideUp 0.3s ease both;
+  display: flex;
+  align-items: center;
+  gap: 0.65rem;
+}
+
+.login-alert-error {
+  background: rgba(239, 68, 68, 0.12);
+  border: 1px solid rgba(239, 68, 68, 0.25);
+  color: #f87171;
+}
+
+.login-alert-success {
+  background: rgba(16, 185, 129, 0.12);
+  border: 1px solid rgba(16, 185, 129, 0.25);
+  color: #34d399;
+}
+
+.login-btn {
+  margin-top: 1rem;
+  padding: 0.85rem;
+  font-size: 1rem;
+}
+
+.login-footer-text {
+  text-align: center;
+  margin-top: 1.5rem;
+  font-size: 0.85rem;
+  color: var(--text-dim);
+}
+
+.login-footer-text span {
+  color: var(--color-secondary);
+  cursor: pointer;
+  font-weight: 500;
+  transition: var(--transition-smooth);
+}
+
+.login-footer-text span:hover {
+  text-shadow: 0 0 8px var(--color-secondary-glow);
+}
+
+/* Account View additions */
+.profile-provider-badge {
+  display: inline-block;
+  padding: 0.25rem 0.6rem;
+  border-radius: 6px;
+  font-size: 0.75rem;
+  font-weight: 600;
+  text-transform: uppercase;
+  margin-top: 0.5rem;
+  width: fit-content;
+}
+
+.badge-google {
+  background: rgba(66, 133, 244, 0.15);
+  color: #8ab4f8;
+  border: 1px solid rgba(66, 133, 244, 0.3);
+}
+
+.badge-local {
+  background: rgba(139, 92, 246, 0.15);
+  color: #c084fc;
+  border: 1px solid rgba(139, 92, 246, 0.3);
+}
+
+.profile-avatar-container {
+  position: relative;
+  transition: transform 0.3s ease;
+}
+
+.profile-avatar-container:hover {
+  transform: scale(1.05);
+}
+
